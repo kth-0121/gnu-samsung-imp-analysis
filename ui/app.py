@@ -5,9 +5,9 @@ IMP Quality Response & Root Cause Analysis System - Streamlit MVP UI
     1. 현재 상태
     2. 영향 가능 Lot (Hold Recommendation)
     3. 이상 Trend
-    4~6. 원인 후보 / Evidence / 검증 순서
-    7~9. 즉시조치 / 후속조치 / 재발방지
-    10. 상세 데이터
+    4. 추천 검증 순서
+    5~7. 즉시조치 / 후속조치 / 재발방지
+    8. 상세 데이터
 """
 
 from __future__ import annotations
@@ -247,16 +247,8 @@ def main():
                            title="Recipe별 Rs 산포 분포")
             st.plotly_chart(fig4, width='stretch')
 
-    # ---- 4~5. 원인 후보 / Evidence ----
-    st.header("4. 주요 원인 후보 및 Evidence")
-    st.info(
-        "Root Cause Candidate Analysis / Evidence Matrix는 현재 MVP(Must 단계) 범위 밖입니다. "
-        "근거 없는 원인 단정을 피하기 위해, 이 기능은 실제 장비 Alarm/PM/계측 이력 데이터가 "
-        "확보된 이후 다음 단계에서 구현합니다."
-    )
-
-    # ---- 6. 추천 검증 순서 (섹션 13 - 데이터에 무관하게 적용 가능한 절차) ----
-    st.header("6. 추천 검증 순서")
+    # ---- 4. 추천 검증 순서 (섹션 13 - 데이터에 무관하게 적용 가능한 절차) ----
+    st.header("4. 추천 검증 순서")
     for i, step in enumerate([
         "계측 이상 여부 확인 (재계측으로 계측 오차 배제)",
         "이상 발생 시점 확인 (Trend 상 Shift 시작 시점)",
@@ -268,11 +260,11 @@ def main():
     ], start=1):
         st.write(f"{i}. {step}")
 
-    # ---- 7~9. Action Recommendation ----
-    st.header("7~9. 대응 방안")
-    for stage, title in [("Immediate", "🚨 7. 즉시조치 (RTP 투입 전)"),
-                          ("Follow-up", "🔧 8. 후속조치 (원인 확인 후)"),
-                          ("Preventive", "🛡️ 9. 재발방지")]:
+    # ---- 5~7. Action Recommendation ----
+    st.header("5~7. 대응 방안")
+    for stage, title in [("Immediate", "🚨 5. 즉시조치 (RTP 투입 전)"),
+                          ("Follow-up", "🔧 6. 후속조치 (원인 확인 후)"),
+                          ("Preventive", "🛡️ 7. 재발방지")]:
         st.subheader(title)
         stage_actions = [a for a in actions if a.stage == stage]
         for a in stage_actions:
@@ -289,8 +281,8 @@ def main():
         st.markdown(report_md)
     st.download_button("보고서 다운로드 (Markdown)", report_md, file_name="imp_rs_report.md")
 
-    # ---- 10. 상세 데이터 ----
-    st.header("10. 상세 데이터")
+    # ---- 8. 상세 데이터 ----
+    st.header("8. 상세 데이터")
     with st.expander("Lot 요약 테이블"):
         st.dataframe(lot_summary, width='stretch', hide_index=True)
     with st.expander("장비별 / Recipe별 집계"):
