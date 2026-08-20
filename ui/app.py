@@ -199,21 +199,36 @@ def main():
     st.header("3. Rs Trend")
     plot_df = lot_summary.copy()
     plot_df["분류"] = plot_df["lot_id"].map(cat_by_lot)
-    plot_df["order"] = range(len(plot_df))
+
+    # X축은 실제 진행일자(timestamp) 기준. timestamp가 전혀 없는 데이터일 때만
+    # 기존 순번(order) 방식으로 폴백한다 (Timestamp 역할 컬럼이 없는 업로드 데이터 대비).
+    has_timestamp = plot_df["timestamp"].notna().any()
+    if has_timestamp:
+        plot_df = plot_df.sort_values("timestamp", na_position="last", kind="stable")
+        x_col, x_label = "timestamp", "진행일자"
+    else:
+        plot_df["order"] = range(len(plot_df))
+        x_col, x_label = "order", "Lot 순서"
 
     t1, t2 = st.columns(2)
     with t1:
         fig = px.scatter(
-            plot_df, x="order", y="rs_std", color="분류", hover_data=["lot_id", "equipment_id", "timestamp"],
+            plot_df, x=x_col, y="rs_std", color="분류", hover_data=["lot_id", "equipment_id", "timestamp"],
             color_discrete_map=CATEGORY_COLOR, title="Lot별 Rs 산포(rs_std) 추이",
+            labels={x_col: x_label},
         )
         fig.add_hline(y=plot_df["rs_std"].median(), line_dash="dot", annotation_text="전체 median")
+        if has_timestamp:
+            fig.update_xaxes(tickformat="%Y-%m-%d\n%H:%M")
         st.plotly_chart(fig, width='stretch')
     with t2:
         fig2 = px.scatter(
-            plot_df, x="order", y="rs_mean", color="분류", hover_data=["lot_id", "equipment_id", "timestamp"],
+            plot_df, x=x_col, y="rs_mean", color="분류", hover_data=["lot_id", "equipment_id", "timestamp"],
             color_discrete_map=CATEGORY_COLOR, title="Lot별 Rs 평균(rs_mean) 추이",
+            labels={x_col: x_label},
         )
+        if has_timestamp:
+            fig2.update_xaxes(tickformat="%Y-%m-%d\n%H:%M")
         st.plotly_chart(fig2, width='stretch')
 
     t3, t4 = st.columns(2)
