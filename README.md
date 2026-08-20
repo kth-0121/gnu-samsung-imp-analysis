@@ -18,8 +18,20 @@ streamlit run ui/app.py
 ## 테스트
 
 ```bash
+pip install -r requirements-dev.txt
 pytest -q
 ```
+
+## 배포 (Streamlit Community Cloud)
+
+이 앱은 상시 실행 서버 + WebSocket이 필요한 Streamlit 앱이라 Vercel(서버리스) 배포에는
+맞지 않는다. 대신 Streamlit 전용 무료 호스팅인 Streamlit Community Cloud를 사용한다.
+
+1. https://share.streamlit.io 접속 후 GitHub 계정으로 로그인
+2. "New app" → 이 저장소(`kth-0121/gnu-samsung-imp-analysis`) 선택, 브랜치 `main`
+3. Main file path에 `ui/app.py` 입력
+4. Deploy — `requirements.txt`가 자동으로 설치된다 (테스트 전용 `pytest`는
+   `requirements-dev.txt`에 분리되어 있어 배포 환경에는 설치되지 않는다)
 
 ## 현재 구현 범위 (Must / MVP)
 
