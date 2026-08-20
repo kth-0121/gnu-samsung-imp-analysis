@@ -1,0 +1,20 @@
+# 분석에 사용되는 임계치.
+# 여기 값은 실제 관리기준이 아니라 MVP 개발/데모용 기본값이며,
+# 실제 Fab 관리기준이 확보되면 이 파일만 교체하면 된다.
+
+anomaly:
+  z_score_threshold: 3.0          # |z| 이 값을 초과하면 통계적 이상점 후보
+  iqr_multiplier: 1.5             # IQR 기반 이상점 판정 배수
+  consecutive_points_for_shift: 3 # 이 개수 이상 연속으로 이상 판정되면 "지속적 변화"로 간주
+  baseline_window_lots: 10        # baseline 평균/표준편차 계산에 사용할 직전 Lot 수
+  # 실제 관리 상한/하한(spec limit)이 제공되면 아래 값을 채운다.
+  # 값이 null이면 해당 metric은 control-limit 기반 판정 없이 z-score/IQR만 사용한다.
+  control_limits:
+    rs_mean: {ucl: null, lcl: null}
+    rs_std: {ucl: null, lcl: null}
+
+impact_scope:
+  time_adjacency_lots: 2          # 동일 장비 기준, 이상 Lot 앞/뒤 몇 개 Lot까지 "High Risk"로 볼 것인지
+
+validation:
+  max_missing_ratio_warn: 0.05    # 컬럼 결측 비율이 이 값을 넘으면 경고

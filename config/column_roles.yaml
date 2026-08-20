@@ -1,0 +1,32 @@
+# 컬럼 자동 인식을 위한 역할(role)별 키워드 목록.
+# 실제 데이터 컬럼명이 정해지면 이 파일만 수정하면 된다 (코드 변경 불필요).
+# 매칭은 컬럼명을 소문자/언더스코어 제거 후 부분 일치로 수행한다.
+
+roles:
+  lot_id:
+    keywords: [lot, lotid, lotno, batch]
+    expected_type: categorical
+
+  wafer_id:
+    keywords: [wafer, waferid, waferno]
+    expected_type: categorical
+
+  site_id:
+    keywords: [site, siteid, point, position]
+    expected_type: categorical
+
+  equipment_id:
+    keywords: [equipment, eqp, eqpid, chamber, tool, machine, mchn]
+    expected_type: categorical
+
+  recipe_id:
+    keywords: [recipe, recipeid, process_recipe, ppid]
+    expected_type: categorical
+
+  timestamp:
+    keywords: [time, timestamp, date, datetime, processtime, eventtime]
+    expected_type: datetime
+
+  measurement_value:
+    keywords: [rs, sheetresistance, resistance, ohm, rs_value, measure]
+    expected_type: numeric
