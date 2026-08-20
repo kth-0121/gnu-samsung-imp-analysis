@@ -1,23 +1,26 @@
 """
 Immediate / Follow-up / Preventive 3단계 대응안을 생성한다 (섹션 17).
 
-Must 단계 범위: Hold 결과와 Validation 결과에서 규칙 기반으로 도출 가능한
-Immediate Action을 중심으로 구현한다. Follow-up/Preventive는 구체적 원인을
-단정하지 않는 범위 내에서 일반화된 후속 절차를 제시한다 (Root Cause Candidate
-Analysis 기능이 추가되면 Follow-up 항목이 원인별로 더 구체화될 예정).
+Hold 결과와 Validation 결과에서 규칙 기반으로 도출 가능한 Immediate Action을
+중심으로 구현한다. Follow-up/Preventive는 candidate_causes(Root Cause Candidate
+Analysis 결과)가 주어지면 Priority가 높은 후보를 참조해 구체화하고, 없으면
+원인을 단정하지 않는 범위 내에서 일반화된 절차를 제시한다.
 """
 
 from __future__ import annotations
 
-from src.schemas.models import HoldRecommendation, LotClassification, ValidationReport, ActionItem
+from src.schemas.models import HoldRecommendation, LotClassification, ValidationReport, ActionItem, CandidateCause
 
 
 def build_action_recommendations(
     hold_recs: list[HoldRecommendation],
     classifications: list[LotClassification],
     validation: ValidationReport,
+    candidate_causes: list[CandidateCause] | None = None,
 ) -> list[ActionItem]:
     actions: list[ActionItem] = []
+    candidate_causes = candidate_causes or []
+    top_candidates = sorted(candidate_causes, key=lambda c: c.verification_priority)[:2]
 
     hold_lots = [r.lot_id for r in hold_recs if r.recommendation == "HOLD RECOMMENDED"]
     check_lots = [r.lot_id for r in hold_recs if r.recommendation.startswith("ADDITIONAL CHECK")]
@@ -74,13 +77,25 @@ def build_action_recommendations(
         ))
 
     # ---- Follow-up (원인 확인 이후 수행) ----
-    actions.append(ActionItem(
-        stage="Follow-up",
-        action="원인 후보(장비/계측/Recipe/Lot 특성)에 대한 근거 기반 검증 수행",
-        rationale="상관관계만으로 원인을 단정하지 않고, Trend/장비 이력/계측 이력 등 Evidence를 "
-                   "종합하여 검증합니다 (ROOT CAUSE 원칙).",
-        evidence_ref=confirmed_lots,
-    ))
+    if top_candidates:
+        for c in top_candidates:
+            actions.append(ActionItem(
+                stage="Follow-up",
+                action=f"[Priority {c.verification_priority}] {c.category} 원인 후보 검증 — {c.recommended_verification}",
+                rationale=f"Root Cause Candidate Analysis 결과 Score {c.score:.0f}/100, "
+                          f"Confidence {c.confidence}. 근거: {c.association_summary} "
+                          "(상관관계 기반 우선순위이며 원인 확정이 아님 - ROOT CAUSE 원칙).",
+                evidence_ref=confirmed_lots,
+            ))
+    else:
+        actions.append(ActionItem(
+            stage="Follow-up",
+            action="원인 후보(장비/계측/Recipe/Lot 특성)에 대한 근거 기반 검증 수행",
+            rationale="Event Log가 없어 Priority를 계산하지 못했습니다. 상관관계만으로 원인을 단정하지 "
+                       "않고, Trend/장비 이력/계측 이력 등 Evidence를 확보한 뒤 종합 검증합니다 "
+                       "(ROOT CAUSE 원칙).",
+            evidence_ref=confirmed_lots,
+        ))
     if equipments:
         actions.append(ActionItem(
             stage="Follow-up",
@@ -114,5 +129,15 @@ def build_action_recommendations(
         rationale="원인이 변경 이력과 관련된 것으로 확인될 경우, 변경관리 절차 보완이 필요합니다.",
         evidence_ref=[],
     ))
+    if top_candidates and top_candidates[0].confidence != "Low":
+        top = top_candidates[0]
+        actions.append(ActionItem(
+            stage="Preventive",
+            action=f"{top.category} 관련 재발방지 대책 우선 검토",
+            rationale=f"현재 데이터 기준 가장 우선순위가 높은 원인 후보({top.category}, "
+                      f"Score {top.score:.0f}/100)에 대해, 검증 결과가 확정되면 그에 맞는 "
+                      "재발방지 대책(모니터링/기준/주기)을 구체화합니다.",
+            evidence_ref=[],
+        ))
 
     return actions

@@ -12,8 +12,9 @@ import pandas as pd
 
 from src.schemas.models import (
     AnalysisResult, LotClassification, HoldRecommendation, ActionItem,
-    ValidationReport, AnomalyResult,
+    ValidationReport, AnomalyResult, CandidateCause,
 )
+from src.analysis.root_cause import build_verification_plan, flatten_evidence
 
 
 def build_analysis_result(
@@ -23,8 +24,12 @@ def build_analysis_result(
     hold_recs: list[HoldRecommendation],
     actions: list[ActionItem],
     validation: ValidationReport,
+    candidate_causes: list[CandidateCause] | None = None,
+    events_available: bool = False,
+    data_source: str = "unknown",
     primary_metric: str = "rs_std",
 ) -> AnalysisResult:
+    candidate_causes = candidate_causes or []
 
     equipment_association: dict = {}
     for c in classifications:
@@ -48,11 +53,25 @@ def build_analysis_result(
 
     notes = [
         "본 결과는 상관관계 기반 분석이며, 인과관계를 단정하지 않습니다. "
-        "제시된 원인 후보는 반드시 추가 검증이 필요합니다.",
-        "Root Cause Candidate / Evidence Matrix / Priority Ranking / Follow-up·Preventive 세부 근거 "
-        "기능은 현재 MVP(Must 단계) 범위 밖이며 다음 단계에서 확장 예정입니다.",
+        "제시된 원인 후보(candidate_causes)는 Priority가 가장 높더라도 '원인 확정'이 아니라 "
+        "'우선 검증 대상'이며, 반드시 추가 검증이 필요합니다.",
         "모든 Hold/조치 권고는 'Recommendation'이며, 최종 판단은 담당 엔지니어가 수행해야 합니다.",
     ]
+    if candidate_causes:
+        notes.append(
+            "Root Cause Priority는 config/weights.yaml에 명시된 임의 가중치로 계산된 점수이며, "
+            "실제 관리기준을 반영한 값이 아닙니다."
+        )
+        if not events_available:
+            notes.append(
+                "Event Log(장비 Alarm/PM, 계측 Event, Recipe 변경 이력)가 제공되지 않아 이력 기반 "
+                "근거(event_match)는 반영되지 않았습니다. 장비/Recipe 집중도 등 통계적 근거만 반영된 "
+                "점수이므로 참고용으로만 활용하세요."
+            )
+    else:
+        notes.append("Lot 데이터가 부족해 Root Cause Candidate Analysis를 계산하지 못했습니다.")
+    if data_source.startswith("mock"):
+        notes.append("EDUCATIONAL MOCK DATA — NOT REAL FAB DATA 기반 결과입니다 (실제 Fab 데이터 아님).")
     if validation.overall_confidence != "High":
         notes.append(f"데이터 품질 신뢰도: {validation.overall_confidence} - {validation.confidence_reason}")
 
@@ -61,10 +80,12 @@ def build_analysis_result(
         affected_lots=classifications,
         equipment_association=equipment_association,
         trend_changes=trend_changes,
-        candidate_causes=[],
-        evidence=[],
+        candidate_causes=candidate_causes,
+        evidence=flatten_evidence(candidate_causes),
         recommended_actions=actions,
         validation=validation,
+        verification_plan=build_verification_plan(candidate_causes) if candidate_causes else [],
+        data_source=data_source,
         notes=notes,
     )
 
@@ -96,11 +117,17 @@ def render_report_markdown(result: AnalysisResult) -> str:
             lines.append(f"    - {r}")
     lines.append("")
 
-    lines.append("## 03. 원인 가설")
-    lines.append("- 본 MVP 단계에서는 Root Cause Candidate/Evidence Matrix가 아직 구현되지 않았습니다.")
-    lines.append("- 위 '01. 현재 상황'의 Trend/Shift 근거를 바탕으로, 검증 순서(섹션 13 기준)에 따라 "
-                  "계측 이상 여부 → 이상 발생 시점 → 동일 장비 집중 여부 → 장비 Alarm/PM/Calibration 순으로 "
-                  "확인할 것을 권고합니다.")
+    lines.append("## 03. 원인 가설 (Root Cause Candidates — Priority 순)")
+    if not result.candidate_causes:
+        lines.append("- Event Log가 제공되지 않아 원인 후보 Priority를 계산하지 못했습니다. "
+                      "섹션13 기준 일반 검증 순서(계측 확인 → 시점 확인 → 동일 장비 집중 여부 → "
+                      "Alarm/PM/Calibration → Recipe 이력 → Lot 특성 → 유관부서 확인)를 따르세요.")
+    else:
+        for c in result.candidate_causes:
+            lines.append(f"### {c.verification_priority}순위. {c.category} — {c.score:.0f}/100 (Confidence: {c.confidence})")
+            for s in c.signals:
+                lines.append(f"  - {s.description} (value={s.value:.2f}, weight={s.weight:.2f})")
+            lines.append(f"  - **권고**: {c.recommended_verification}")
     lines.append("")
 
     lines.append("## 04. 검증 및 조치")

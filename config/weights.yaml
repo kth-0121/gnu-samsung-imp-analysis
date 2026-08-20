@@ -1,0 +1,35 @@
+# Root Cause Candidate Analysis - Priority Ranking에 사용되는 가중치/임계치.
+#
+# 아래 가중치는 "임의로 설정한 값"이며 실제 관리기준/현장 경험을 반영한 값이 아니다
+# (섹션16 "임의의 가중치를 사용하는 경우 코드와 UI에 명확하게 표시한다" 원칙에 따라
+# 여기 명시하고, UI에도 동일하게 표시한다). 실제 데이터가 확보되면 재조정이 필요하다.
+#
+# 각 카테고리 점수 = sum(signal.value * signal.weight), 카테고리별 weight 합은 1.0이 되도록
+# 구성되어 있어 카테고리 간 점수(0~1, UI에는 0~100으로 환산)를 직접 비교할 수 있다.
+
+root_cause:
+  # 이상 발생 시점(anomaly_start) 기준, 이 시간 이내의 이력만 "시간적으로 연관"된 것으로 인정한다.
+  event_window_hours: 6
+
+  confidence_thresholds:
+    high: 0.6
+    medium: 0.3
+
+  category_weights:
+    equipment:
+      concentration: 0.5   # 이상 Lot이 특정 장비 하나에 얼마나 집중되어 있는가
+      event_match: 0.5     # 그 장비에서 이상 발생 시점 근처 Alarm/PM 이력이 있는가
+    measurement:
+      equipment_diversity: 0.4   # 이상 Lot이 여러 장비에 걸쳐 나타나는가 (특정 장비 집중의 반대)
+      event_match: 0.35          # 이상 발생 시점 근처 계측 관련 Event/Calibration 이력이 있는가
+      process_stability: 0.25    # 같은 기간 Recipe/Process 변경 이력이 없는가 (없을수록 계측 요인 가능성 ↑)
+    process_recipe:
+      cross_equipment_recipe_match: 0.55  # 이상 Lot이 동일 Recipe를 공유하며, 그 Recipe가 여러 장비에서 쓰이는가
+      event_match: 0.45                    # 그 Recipe에 대해 이상 발생 시점 근처 변경 이력이 있는가
+
+  # Material/Lot, Other는 현재 데이터에 관련 컬럼/이력이 없어 근거를 생성할 수 없으므로
+  # 낮은 baseline 점수만 부여한다 (0으로 완전히 배제하지는 않음 - 데이터가 없다는 것 자체가
+  # "판단 불가"이지 "원인이 아니다"를 의미하지 않기 때문).
+  baseline_scores:
+    material_lot: 0.1
+    other: 0.05

@@ -28,3 +28,7 @@ def load_column_roles() -> dict:
 
 def load_thresholds() -> dict:
     return load_yaml("thresholds.yaml")
+
+
+def load_weights() -> dict:
+    return load_yaml("weights.yaml")
