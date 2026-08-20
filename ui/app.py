@@ -255,7 +255,7 @@ def main():
         "동일 장비 집중 여부 확인 (Impact Scope 결과)",
         "장비 Alarm / PM / Calibration 이력 확인 (설비팀 협의)",
         "공정 조건 및 Recipe 변경 이력 확인",
-        "필요 시 유관부서(설비팀/수율팀) 추가 확인 요청",
+        "필요 시 유관부서(설비팀) 추가 확인 요청",
     ], start=1):
         st.write(f"{i}. {step}")
 

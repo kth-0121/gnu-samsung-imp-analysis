@@ -43,9 +43,8 @@ def build_action_recommendations(
         ))
     actions.append(ActionItem(
         stage="Immediate",
-        action="설비팀에 영향 장비/시간대 공유, 수율팀에 영향 Lot 목록 공유",
-        rationale="설비팀은 장비 Alarm/PM 이력 확인이, 수율팀은 품질 영향 평가가 필요합니다 "
-                   "(COLLABORATION 원칙).",
+        action="설비팀에 영향 장비/시간대 공유",
+        rationale="설비팀의 장비 Alarm/PM 이력 확인이 필요합니다 (COLLABORATION 원칙).",
         evidence_ref=hold_lots + check_lots,
     ))
     if validation.overall_confidence != "High":
@@ -74,8 +73,8 @@ def build_action_recommendations(
         ))
     actions.append(ActionItem(
         stage="Follow-up",
-        action="Hold Lot 재측정 결과와 최초 계측 결과 비교, 품질/수율 영향 평가",
-        rationale="재현성 확인 및 실제 영향도 파악을 위해 필요합니다 (YIELD & QUALITY 원칙).",
+        action="Hold Lot 재측정 결과와 최초 계측 결과 비교",
+        rationale="재현성 확인을 위해 필요합니다 (DATA FIRST 원칙).",
         evidence_ref=hold_lots,
     ))
 
