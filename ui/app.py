@@ -200,12 +200,16 @@ def main():
     plot_df = lot_summary.copy()
     plot_df["분류"] = plot_df["lot_id"].map(cat_by_lot)
 
-    # X축은 실제 진행일자(timestamp) 기준. timestamp가 전혀 없는 데이터일 때만
-    # 기존 순번(order) 방식으로 폴백한다 (Timestamp 역할 컬럼이 없는 업로드 데이터 대비).
+    # X축은 "공정 진행 시간(초)" 기준. 데이터에 별도의 초 단위 진행시간 컬럼은 없으므로
+    # (LOT_ID, TIMESTAMP, RS_OHM_SQ 등만 존재) 이미 파싱되어 있는 timestamp를 이용해
+    # 가장 이른 Lot 시각 대비 경과 초를 계산한다 - 달력 날짜가 아니라 경과시간이다.
+    # timestamp가 전혀 없는 데이터일 때만 기존 순번(order) 방식으로 폴백한다.
     has_timestamp = plot_df["timestamp"].notna().any()
     if has_timestamp:
         plot_df = plot_df.sort_values("timestamp", na_position="last", kind="stable")
-        x_col, x_label = "timestamp", "진행일자"
+        start_time = plot_df["timestamp"].min()
+        plot_df["elapsed_sec"] = (plot_df["timestamp"] - start_time).dt.total_seconds()
+        x_col, x_label = "elapsed_sec", "진행시간 (초)"
     else:
         plot_df["order"] = range(len(plot_df))
         x_col, x_label = "order", "Lot 순서"
@@ -213,22 +217,22 @@ def main():
     t1, t2 = st.columns(2)
     with t1:
         fig = px.scatter(
-            plot_df, x=x_col, y="rs_std", color="분류", hover_data=["lot_id", "equipment_id", "timestamp"],
+            plot_df, x=x_col, y="rs_std", color="분류", hover_data=["lot_id", x_col],
             color_discrete_map=CATEGORY_COLOR, title="Lot별 Rs 산포(rs_std) 추이",
-            labels={x_col: x_label},
+            labels={x_col: x_label, "rs_std": "Rs 산포 (rs_std)"},
         )
         fig.add_hline(y=plot_df["rs_std"].median(), line_dash="dot", annotation_text="전체 median")
         if has_timestamp:
-            fig.update_xaxes(tickformat="%Y-%m-%d\n%H:%M")
+            fig.update_xaxes(ticksuffix="초")
         st.plotly_chart(fig, width='stretch')
     with t2:
         fig2 = px.scatter(
-            plot_df, x=x_col, y="rs_mean", color="분류", hover_data=["lot_id", "equipment_id", "timestamp"],
+            plot_df, x=x_col, y="rs_mean", color="분류", hover_data=["lot_id", x_col],
             color_discrete_map=CATEGORY_COLOR, title="Lot별 Rs 평균(rs_mean) 추이",
-            labels={x_col: x_label},
+            labels={x_col: x_label, "rs_mean": "Rs 평균 (rs_mean)"},
         )
         if has_timestamp:
-            fig2.update_xaxes(tickformat="%Y-%m-%d\n%H:%M")
+            fig2.update_xaxes(ticksuffix="초")
         st.plotly_chart(fig2, width='stretch')
 
     t3, t4 = st.columns(2)
