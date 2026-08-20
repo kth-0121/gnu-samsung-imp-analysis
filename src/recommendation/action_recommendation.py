@@ -26,22 +26,6 @@ def build_action_recommendations(
                           if c.category in ("Confirmed Abnormal", "High Risk") and c.equipment_id})
 
     # ---- Immediate ----
-    if hold_lots:
-        actions.append(ActionItem(
-            stage="Immediate",
-            action=f"영향 가능 Lot {len(hold_lots)}건 RTP 투입 전 HOLD",
-            rationale="Impact Scope 분석에서 'Confirmed Abnormal' 또는 'High Risk'로 분류된 Lot입니다. "
-                       "다음 공정(RTP) 투입 전 격리하여 확산을 방지합니다 (Containment 원칙).",
-            evidence_ref=hold_lots,
-        ))
-    if check_lots:
-        actions.append(ActionItem(
-            stage="Immediate",
-            action=f"추가 확인 대상 Lot {len(check_lots)}건에 대해 데이터 재검토",
-            rationale="동일 장비 또는 동일 Recipe 연관성은 있으나 시간 인접성 등 근거가 부족하여 "
-                       "즉시 Hold 대신 우선 재검토가 필요합니다.",
-            evidence_ref=check_lots,
-        ))
     if confirmed_lots:
         actions.append(ActionItem(
             stage="Immediate",
