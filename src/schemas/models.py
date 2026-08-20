@@ -135,41 +135,6 @@ class ActionItem:
 
 
 # ---------------------------------------------------------------------------
-# Root Cause Candidate Analysis / Evidence / Priority Ranking
-# ---------------------------------------------------------------------------
-
-@dataclass
-class EvidenceSignal:
-    """원인 후보 점수를 구성하는 개별 근거 신호. 값과 설명을 함께 남겨 '왜 이 점수인지' 추적 가능하게 한다."""
-    name: str
-    value: float           # 0.0 ~ 1.0로 정규화된 신호 값
-    weight: float           # config/weights.yaml에서 온 가중치 (임의 설정값, 문서화되어 있음)
-    description: str        # 사람이 읽을 수 있는 근거 설명 (수치 포함)
-
-
-@dataclass
-class CandidateCause:
-    category: str                # 'Equipment' | 'Measurement' | 'Process/Recipe' | 'Material/Lot' | 'Other'
-    score: float                  # 0~100. Evidence 신호의 가중합 (섹션16 - 임의 가중치, config에 명시)
-    confidence: str                # 'High' | 'Medium' | 'Low'
-    verification_priority: int     # 1 = 가장 먼저 검증할 후보
-    signals: list                  # list[EvidenceSignal]
-    association_summary: str       # signals 설명을 이어붙인 요약 문장
-    recommended_verification: str  # 이 후보를 검증하기 위해 무엇을 확인해야 하는지
-
-    def to_dict(self) -> dict:
-        return {
-            "category": self.category,
-            "score": round(self.score, 1),
-            "confidence": self.confidence,
-            "verification_priority": self.verification_priority,
-            "signals": [asdict(s) for s in self.signals],
-            "association_summary": self.association_summary,
-            "recommended_verification": self.recommended_verification,
-        }
-
-
-# ---------------------------------------------------------------------------
 # Top-level Analysis Result (섹션 20의 JSON 구조에 대응)
 # ---------------------------------------------------------------------------
 
@@ -179,12 +144,10 @@ class AnalysisResult:
     affected_lots: list                  # list[LotClassification]
     equipment_association: dict          # equipment_id -> 관련 lot_id 목록/설명
     trend_changes: dict                  # metric별 AnomalyResult.to_dict()
-    candidate_causes: list               # list[CandidateCause], Priority 내림차순 정렬
-    evidence: list                       # list[str], candidate_causes의 signals를 평탄화한 근거 문장 모음
+    candidate_causes: list               # Should 단계에서 채움. MVP에서는 비어있을 수 있음
+    evidence: list                       # Should 단계에서 채움.
     recommended_actions: list            # list[ActionItem]
     validation: ValidationReport
-    verification_plan: list = field(default_factory=list)  # list[str], Priority 순서의 검증 절차
-    data_source: str = "unknown"         # 'mock:<sample_id>' | 'upload' — mock/실제 데이터 구분용
     notes: list = field(default_factory=list)   # 불확실성/제약 사항 명시
 
     def to_dict(self) -> dict:
@@ -193,11 +156,9 @@ class AnalysisResult:
             "affected_lots": [asdict(l) for l in self.affected_lots],
             "equipment_association": self.equipment_association,
             "trend_changes": self.trend_changes,
-            "candidate_causes": [c.to_dict() for c in self.candidate_causes],
+            "candidate_causes": self.candidate_causes,
             "evidence": self.evidence,
             "recommended_actions": [asdict(a) for a in self.recommended_actions],
             "validation": self.validation.to_dict(),
-            "verification_plan": self.verification_plan,
-            "data_source": self.data_source,
             "notes": self.notes,
         }

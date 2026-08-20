@@ -5,9 +5,7 @@ IMP Quality Response & Root Cause Analysis System - Streamlit MVP UI
     1. 현재 상태
     2. 영향 가능 Lot (Hold Recommendation)
     3. 이상 Trend
-    4. 주요 원인 후보 (Root Cause Candidates — Priority Ranking)
-    5. Evidence 상세 (4번에 통합 표시)
-    6. 추천 검증 순서
+    4~6. 원인 후보 / Evidence / 검증 순서
     7~9. 즉시조치 / 후속조치 / 재발방지
     10. 상세 데이터
 """
@@ -25,36 +23,17 @@ import streamlit as st
 
 from src.ingestion.loader import load_data, DataLoadError
 from src.ingestion.schema_inference import classify_column_types, infer_roles
-from src.ingestion.event_loader import load_events
 from src.validation.data_validation import run_validation
 from src.analysis.trend_analysis import build_lot_summary, trend_by_equipment, trend_by_recipe
 from src.analysis.anomaly_detection import detect_anomalies
 from src.analysis.impact_scope import classify_impact
-from src.analysis.root_cause import generate_candidate_causes
 from src.recommendation.hold_recommendation import build_hold_recommendations
 from src.recommendation.action_recommendation import build_action_recommendations
 from src.reporting.report_builder import build_analysis_result, render_report_markdown
 from src.schemas.models import ColumnRoleMap
-from src.config import load_thresholds, load_weights
+from src.config import load_thresholds
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-SAMPLES_DIR = PROJECT_ROOT / "data" / "mock" / "samples"
-
-SAMPLE_SPECS = {
-    "sample1_equipment": {
-        "label": "Sample 1 — Equipment-focused anomaly",
-        "description": "Equipment 관련 이상 상황 (특정 장비에 이상 Lot 집중 + Alarm 이력)",
-    },
-    "sample2_measurement": {
-        "label": "Sample 2 — Measurement-focused anomaly",
-        "description": "Measurement 관련 이상 상황 (여러 장비 동시 이상 + 계측 이력, 특정 장비 집중 없음)",
-    },
-    "sample3_recipe": {
-        "label": "Sample 3 — Process/Recipe-focused anomaly",
-        "description": "Recipe/Process 관련 이상 상황 (서로 다른 장비지만 동일 Recipe 공유 + 변경 이력)",
-    },
-}
-MOCK_DISCLAIMER = "EDUCATIONAL MOCK DATA — NOT REAL FAB DATA (실제 Fab 데이터가 아닌 교육용 예시입니다)"
+MOCK_DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "mock" / "mock_imp_rs_data.csv"
 
 st.set_page_config(page_title="IMP Rs 이상 대응 지원 시스템", layout="wide")
 
@@ -110,45 +89,27 @@ def main():
 
     with st.sidebar:
         st.header("데이터 입력")
-        uploaded = st.file_uploader("측정 데이터 CSV/Excel 업로드", type=["csv", "xlsx", "xls"])
-        uploaded_events = st.file_uploader(
-            "Event Log 업로드 (선택 — 장비 Alarm/PM, 계측 Event, Recipe 변경 이력)",
-            type=["csv", "xlsx", "xls"],
-        )
+        uploaded = st.file_uploader("CSV 또는 Excel 파일 업로드", type=["csv", "xlsx", "xls"])
+        use_mock = st.button("샘플(Mock) 데이터로 체험하기", width='stretch')
         st.divider()
-        st.caption("교육용 Sample Dataset")
-        sample_label_to_id = {v["label"]: k for k, v in SAMPLE_SPECS.items()}
-        sample_choice = st.selectbox("Sample Dataset 선택", ["(선택 안 함)"] + list(sample_label_to_id.keys()))
-        sample_id = sample_label_to_id.get(sample_choice)
-        if sample_id:
-            st.caption(SAMPLE_SPECS[sample_id]["description"])
-        st.divider()
-        st.caption(MOCK_DISCLAIMER)
+        st.caption("Mock 데이터는 EDUCATIONAL MOCK DATA이며 실제 Fab 데이터가 아닙니다.")
 
-    if sample_id:
-        st.session_state["_data_source"] = sample_id
-    elif uploaded is not None:
-        st.session_state["_data_source"] = "upload"
+    if use_mock:
+        st.session_state["_use_mock"] = True
+    if uploaded is not None:
+        st.session_state["_use_mock"] = False
         st.session_state["_uploaded"] = uploaded
-        st.session_state["_uploaded_events"] = uploaded_events
 
-    data_source = st.session_state.get("_data_source")
-    if data_source is None:
-        st.info("왼쪽에서 데이터를 업로드하거나 Sample Dataset을 선택하세요.")
+    if not st.session_state.get("_use_mock") and "_uploaded" not in st.session_state:
+        st.info("왼쪽에서 데이터를 업로드하거나 샘플 데이터를 불러오세요.")
         return
 
-    events_df = None
     try:
-        if data_source in SAMPLE_SPECS:
-            st.warning(MOCK_DISCLAIMER)
-            sample_dir = SAMPLES_DIR / data_source
-            df = load_data(str(sample_dir / "measurements.csv"))
-            events_df = load_events(str(sample_dir / "events.csv"))
+        if st.session_state.get("_use_mock"):
+            st.warning("EDUCATIONAL MOCK DATA — NOT REAL FAB DATA (실제 Fab 데이터가 아닌 교육용 예시입니다)")
+            df = load_data(str(MOCK_DATA_PATH))
         else:
             df = load_data(st.session_state["_uploaded"])
-            ev_file = st.session_state.get("_uploaded_events")
-            if ev_file is not None:
-                events_df = load_events(ev_file)
     except DataLoadError as e:
         st.error(str(e))
         return
@@ -176,7 +137,6 @@ def main():
     _validation_banner(validation)
 
     thresholds = load_thresholds()
-    weights_cfg = load_weights()
     try:
         lot_summary = build_lot_summary(df, role_map)
     except Exception as e:
@@ -192,18 +152,9 @@ def main():
     }
     classifications = classify_impact(lot_summary, anomaly_results, thresholds)
     hold_recs = build_hold_recommendations(classifications)
-
-    anomaly_start = anomaly_results["rs_std"].anomaly_start or anomaly_results["rs_mean"].anomaly_start
-    candidate_causes = generate_candidate_causes(
-        lot_summary, classifications, events_df, anomaly_start, weights_cfg
-    )
-    actions = build_action_recommendations(hold_recs, classifications, validation, candidate_causes)
-
-    data_source_label = f"mock:{data_source}" if data_source in SAMPLE_SPECS else "upload"
+    actions = build_action_recommendations(hold_recs, classifications, validation)
     analysis_result = build_analysis_result(
-        lot_summary, classifications, anomaly_results, hold_recs, actions, validation,
-        candidate_causes=candidate_causes, events_available=events_df is not None,
-        data_source=data_source_label,
+        lot_summary, classifications, anomaly_results, hold_recs, actions, validation
     )
 
     # ---- 1. 현재 상태 ----
@@ -277,34 +228,16 @@ def main():
                            title="Recipe별 Rs 산포 분포")
             st.plotly_chart(fig4, width='stretch')
 
-    # ---- 4~5. 원인 후보 / Evidence / Priority ----
-    st.header("4. 주요 원인 후보 (Root Cause Candidates) — Priority Ranking")
-    st.caption(
-        "점수는 config/weights.yaml에 명시된 임의 가중치로 계산되며, 실제 관리기준이 아닙니다. "
-        "Priority가 가장 높은 후보도 '원인 확정'이 아니라 '우선 검증 대상'입니다."
+    # ---- 4~5. 원인 후보 / Evidence ----
+    st.header("4. 주요 원인 후보 및 Evidence")
+    st.info(
+        "Root Cause Candidate Analysis / Evidence Matrix는 현재 MVP(Must 단계) 범위 밖입니다. "
+        "근거 없는 원인 단정을 피하기 위해, 이 기능은 실제 장비 Alarm/PM/계측 이력 데이터가 "
+        "확보된 이후 다음 단계에서 구현합니다."
     )
-    if events_df is None:
-        st.info("Event Log가 없어 이력(Alarm/PM/계측/Recipe 변경) 기반 근거는 반영되지 않았습니다. "
-                "아래 점수는 장비/Recipe 집중도 등 통계적 근거만 반영된 값입니다.")
-    cc_df = pd.DataFrame([{
-        "Priority": c.verification_priority, "카테고리": c.category, "Score": f"{c.score:.0f}/100",
-        "Confidence": c.confidence,
-    } for c in candidate_causes])
-    st.dataframe(cc_df, width='stretch', hide_index=True)
 
-    for c in candidate_causes:
-        with st.expander(f"{c.verification_priority}순위 · {c.category} · {c.score:.0f}/100 (Confidence: {c.confidence})"):
-            for s in c.signals:
-                st.write(f"- {s.description}  _(value={s.value:.2f}, weight={s.weight:.2f})_")
-            st.caption(f"권고 검증: {c.recommended_verification}")
-
-    # ---- 6. 추천 검증 순서 ----
+    # ---- 6. 추천 검증 순서 (섹션 13 - 데이터에 무관하게 적용 가능한 절차) ----
     st.header("6. 추천 검증 순서")
-    if analysis_result.verification_plan:
-        st.write("**데이터 기반 Priority (위 Root Cause Candidates 순서와 동일):**")
-        for line in analysis_result.verification_plan:
-            st.write(line)
-        st.caption("아래는 데이터와 무관하게 항상 적용 가능한 일반 절차입니다 (섹션13 기준).")
     for i, step in enumerate([
         "계측 이상 여부 확인 (재계측으로 계측 오차 배제)",
         "이상 발생 시점 확인 (Trend 상 Shift 시작 시점)",
@@ -346,12 +279,7 @@ def main():
         st.dataframe(trend_by_equipment(lot_summary), width='stretch', hide_index=True)
         st.write("Recipe별")
         st.dataframe(trend_by_recipe(lot_summary), width='stretch', hide_index=True)
-    with st.expander("Event Log"):
-        if events_df is None:
-            st.write("Event Log가 없습니다.")
-        else:
-            st.dataframe(events_df, width='stretch', hide_index=True)
-    with st.expander("원본 측정 데이터"):
+    with st.expander("원본 데이터"):
         st.dataframe(df, width='stretch', hide_index=True)
     with st.expander("구조화 분석 결과 (JSON) — LLM/외부 연동용"):
         st.json(analysis_result.to_dict())
